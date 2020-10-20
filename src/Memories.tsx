@@ -1,3 +1,5 @@
+import "pinch-zoom-element";
+
 import React from "react";
 
 import { Timeline } from "./Timeline";
@@ -18,9 +20,9 @@ export function Display() {
 
   if (path) {
     return (
-      <div className="Display">
+      <pinch-zoom class="Display">
         <img src={`i/${path}`} />
-      </div>
+      </pinch-zoom>
     );
   }
 
