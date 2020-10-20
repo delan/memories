@@ -1,3 +1,4 @@
+```
 # build client
 npm run build
 
@@ -21,3 +22,4 @@ npm run dwim
 
 # test coverage
 npm run test:coverage
+```
