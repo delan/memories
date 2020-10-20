@@ -1,0 +1,255 @@
+<!doctype html><meta charset="utf-8">
+<base href="/">
+<style>
+    * {
+        box-sizing: border-box;
+    }
+    :root {
+        /* instant taps */
+        touch-action: manipulation;
+
+        /* instant taps, no pan-y, no pinch-zoom */
+        touch-action: pan-x;
+
+        /* heed EXIF orientation */
+        image-orientation: from-image;
+
+        /* horizontal scrollbar only */
+        overflow: scroll visible;
+
+        background: black;
+    }
+    .top {
+        display: flex;
+        flex-flow: column nowrap;
+        justify-content: start;
+        margin: 0;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+        height: 100%;
+    }
+    .top .display {
+        width: 100%;
+        height: 80%;
+        line-height: 0;
+        position: fixed;
+        top: 0;
+    }
+    .top .display > img {
+        width: 100%;
+        height: 100%;
+        object-fit: scale-down;
+    }
+    .top .display > img:not([src]) {
+        visibility: hidden;
+    }
+    .top .timeline {
+        height: 20%;
+        line-height: 0;
+        white-space: nowrap;
+        position: absolute;
+        bottom: 0;
+    }
+    .top .cluster {
+        display: inline-block;
+        height: 100%;
+        margin-right: 1em;
+        direction: rtl;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top .cluster > a {
+        display: inline-block;
+        width: 13px;
+        height: 100%;
+        transition-duration: 0.25s;
+        transform: scale(calc(1 - 0.2 * var(--p) / var(--q)));
+        transform-origin: right;
+        filter: brightness(0.5);
+    }
+    .top.ready2 .cluster > a {
+        transition-property: width, transform, filter;
+    }
+    .top:not(.ready1) .cluster > a,
+    .top .cluster > a:last-child,
+    .top .cluster:focus-within > a,
+    .top .cluster.selected > a {
+        width: var(--width);
+        transform: scale(1);
+    }
+    /* .top:not(.ready1) .cluster > a, */
+    .top .cluster > a.selected {
+        filter: brightness(1);
+    }
+    .top .cluster > a > img {
+        height: 100%;
+    }
+</style>
+<div class="top">
+    <div class="display">
+        <img>
+    </div>
+</div>
+<script>
+    function $(selector, scope = document) {
+        return scope.querySelector(selector);
+    }
+
+    function create(names, fun = result => {}) {
+        const [tag, ...classes] = names.split(".");
+        const result = document.createElement(tag);
+        result.classList.add(...classes);
+        return fun(result) ?? result;
+    }
+
+    function append(parent, names, fun = (result, parent) => {}) {
+        parent.append(create(names, result => fun(result, parent)));
+    }
+
+    async function main() {
+        let state;
+        let remaining = 0;
+
+        addEventListener("transitionend", () => {
+            if (select._element) {
+                scroll(select._element, select._smooth);
+                select._element = null;
+            }
+        });
+
+        if (location.href.startsWith(document.baseURI)) {
+            const base = new URL(document.baseURI);
+            state = location.pathname.slice(base.pathname.length);
+            // popstate({ state });
+        }
+
+        addEventListener("popstate", popstate);
+
+        const meta = await fetchMeta();
+        console.log(meta);
+
+        const clusters = findClusters(meta.filter(({ path }) => path.endsWith(".JPG") || path.endsWith(".PNG")));
+        console.log(clusters.map(({ birth, items }) => ({
+            birth: new Date(birth).toISOString(),
+            start: items[0].path,
+            length: items.length,
+        })));
+
+        append($(".top"), "div.timeline", (timeline, top) => {
+            clusters.forEach(({ birth, items }) => {
+                timeline.append(create("div.cluster", cluster => {
+                    const j = items.length - 1;
+                    cluster.style.setProperty("--q", j ** 2);
+                    items.reverse().forEach(({ birth, path }, i) => {
+                        cluster.append(create("a", a => {
+                            a.href = path;
+                            a.dataset.src = path;
+                            a.addEventListener("click", click);
+                            a.style.setProperty("--p", (j - i) ** 2);
+                            a.append(create("img", img => {
+                                ++remaining;
+                                img.addEventListener("load", ({ target }) => {
+                                    target.parentNode.style.setProperty("--width", `${target.getClientRects()[0].width}px`);
+                                    if (--remaining == 0) {
+                                        document.querySelector(`.top [data-src="${state}"]`)?.focus({ preventScroll: true });
+                                        select(state, false);
+                                        document.querySelector(".top").classList.add("ready1");
+                                    }
+                                });
+                                img.src = `i/${path}.png`;
+                            }));
+                        }));
+                    });
+                }));
+            });
+        });
+    }
+
+    function click(event) {
+        event.preventDefault();
+        const state = event.currentTarget.dataset.src;
+        history.pushState(state, "", state);
+        popstate({ state });
+    }
+
+    function scroll(element, smooth) {
+        console.log(`scroll: ${element} ${smooth}`);
+        element.scrollIntoView({
+            inline: "center",
+            behavior: smooth ? "smooth" : "auto",
+        });
+    }
+
+    function select(src, smooth = true) {
+        document.querySelector(".top .display > img").src = `i/${src}`;
+
+        const prev = document.querySelector(".top .cluster > a.selected");
+        prev?.classList.remove("selected");
+        prev?.parentElement?.classList.remove("selected");
+
+        const next = document.querySelector(`.top [data-src="${src}"]`);
+        next?.classList.add("selected");
+        next?.parentElement?.classList.add("selected");
+
+        if (!next) {
+            return;
+        } else if (next?.parentElement == prev?.parentElement) {
+            scroll(next, smooth);
+        } else {
+            select._element = next;
+            select._smooth = smooth;
+        }
+    }
+
+    select._element = null;
+    select._smooth = true;
+
+    function popstate({ state: src }) {
+        select(src);
+    }
+
+    async function fetchMeta() {
+        const response = await fetch("meta.txt");
+        const text = await response.text();
+        const records = text.trim().split("\n").map(x => x.split(" "));
+        return records
+            .filter(x => x.length == 7)
+            .filter(([, , , , , , category]) => category)
+            .map(([birth, path, , , , , category]) => ({
+                birth: birth * 1000,
+                category,
+                path,
+            }))
+            .sort((p, q) => p.birth - q.birth);
+    }
+
+    function findClusters(meta) {
+        const result = [];
+        let cluster;
+        let last = -Infinity;
+
+        for (const item of meta) {
+            if (!cluster || item.birth - last > 3_600_000) {
+                if (cluster) {
+                    result.push(cluster);
+                }
+                cluster = { birth: item.birth, items: [item] };
+            } else {
+                cluster.items.push(item);
+            }
+            last = item.birth;
+        }
+
+        if (cluster) {
+            result.push(cluster);
+        }
+
+        return result;
+    }
+
+    main();
+</script>
