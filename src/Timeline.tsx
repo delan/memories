@@ -90,11 +90,20 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
   }, []);
 
   useEffect(() => {
-    if (path == selected) {
+    if (path == selected && path != previous) {
       self.current!.focus({
         preventScroll: true,
       });
+
+      self.current!.scrollIntoView({
+        inline: "center",
+        block: "center",
+        behavior: "smooth",
+      });
     }
+
+    console.log("setPrevious");
+    setPrevious(selected);
   }, [selected]);
 
   const classes = ["Item"];
@@ -125,14 +134,7 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
   }
 
   function focus() {
-    if (path == selected && path != previous) {
-      self.current!.scrollIntoView({
-        inline: "center",
-        block: "center",
-        behavior: "smooth",
-      });
-      setPrevious(selected);
-    } else {
+    if (path != selected || path == previous) {
       self.current!.scrollIntoView({
         inline: "nearest",
         block: "nearest",
