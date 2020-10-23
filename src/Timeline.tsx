@@ -9,7 +9,7 @@ import { usePath } from "./path";
 import { ClusterMeta, ItemMeta } from "./data";
 
 export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
-  const { path, push } = usePath();
+  const { path } = usePath();
   const self = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -70,7 +70,7 @@ export function Cluster({ items }: ClusterMeta) {
 
   return (
     <div ref={self} className={classes.join(" ")}>
-      {[...items].reverse().map(({ path, ...rest }, i) => (
+      {[...items].map(({ path, ...rest }, i) => (
         <Item key={path} i={i} path={path} {...rest} />
       ))}
     </div>
@@ -88,6 +88,9 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
 
   useEffect(() => {
     if (path == selected) {
+      self.current!.focus({
+        preventScroll: true,
+      });
       self.current!.scrollIntoView({
         inline: "center",
         block: "center",
@@ -109,7 +112,7 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
       data-src={path}
       onClick={click}
     >
-      <svg viewBox={`0 0 ${x} ${y}`}>
+      <svg viewBox={`0 0 ${x} ${y}`} preserveAspectRatio="xMaxYMid slice">
         <image width={x} height={y} href={`i/${path}.png`} />
       </svg>
     </a>
