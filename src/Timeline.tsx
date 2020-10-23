@@ -4,6 +4,7 @@ import React, {
   useLayoutEffect,
   MouseEvent,
   WheelEvent,
+  useState,
 } from "react";
 import { usePath } from "./path";
 import { ClusterMeta, ItemMeta } from "./data";
@@ -11,14 +12,6 @@ import { ClusterMeta, ItemMeta } from "./data";
 export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
   const { path } = usePath();
   const self = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    get(path)?.scrollIntoView({
-      inline: "center",
-      block: "center",
-      behavior: "auto",
-    });
-  }, []);
 
   return (
     <div ref={self} onWheel={wheel} className="Timeline">
@@ -80,24 +73,31 @@ export function Cluster({ items }: ClusterMeta) {
 export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
   const { path: selected, push } = usePath();
   const self = useRef<HTMLAnchorElement>(null);
-  const classes = ["Item"];
+  const [previous, setPrevious] = useState(selected);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     self.current!.style.setProperty("--i", String(i));
   }, [i]);
+
+  useLayoutEffect(() => {
+    if (path == selected) {
+      self.current!.scrollIntoView({
+        inline: "center",
+        block: "center",
+        behavior: "auto",
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (path == selected) {
       self.current!.focus({
         preventScroll: true,
       });
-      self.current!.scrollIntoView({
-        inline: "center",
-        block: "center",
-        behavior: "smooth",
-      });
     }
   }, [selected]);
+
+  const classes = ["Item"];
 
   if (path == selected) {
     classes.push("selected");
@@ -111,6 +111,7 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
       data-index={index}
       data-src={path}
       onClick={click}
+      onFocus={focus}
     >
       <svg viewBox={`0 0 ${x} ${y}`} preserveAspectRatio="xMaxYMid slice">
         <image width={x} height={y} href={`i/${path}.png`} />
@@ -121,5 +122,22 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
   function click(event: MouseEvent<HTMLElement>) {
     event.preventDefault();
     push(event.currentTarget.dataset.src!);
+  }
+
+  function focus() {
+    if (path == selected && path != previous) {
+      self.current!.scrollIntoView({
+        inline: "center",
+        block: "center",
+        behavior: "smooth",
+      });
+      setPrevious(selected);
+    } else {
+      self.current!.scrollIntoView({
+        inline: "nearest",
+        block: "nearest",
+        behavior: "smooth",
+      });
+    }
   }
 }
