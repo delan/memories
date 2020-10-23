@@ -4,7 +4,6 @@ import React, {
   useLayoutEffect,
   MouseEvent,
   WheelEvent,
-  useState,
 } from "react";
 import { usePath } from "./path";
 import { ClusterMeta, ItemMeta } from "./data";
@@ -73,7 +72,7 @@ export function Cluster({ items }: ClusterMeta) {
 export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
   const { path: selected, push } = usePath();
   const self = useRef<HTMLAnchorElement>(null);
-  const [previous, setPrevious] = useState(selected);
+  const previous = usePrevious(selected);
 
   useLayoutEffect(() => {
     self.current!.style.setProperty("--i", String(i));
@@ -104,8 +103,6 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
         });
       }
     }
-
-    setPrevious(selected);
   }, [selected]);
 
   const classes = ["Item"];
@@ -144,4 +141,14 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
       });
     }
   }
+}
+
+function usePrevious<T>(value: T) {
+  const state = useRef<T | null>(null);
+
+  useEffect(() => {
+    state.current = value;
+  });
+
+  return state.current;
 }
