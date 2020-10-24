@@ -8,6 +8,8 @@ import React, {
   useState,
   useMemo,
 } from "react";
+import classNames from "classnames";
+
 import { usePath } from "./path";
 import { ClusterMeta, ItemMeta } from "./data";
 
@@ -39,14 +41,14 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
       {clusters.map((cluster, i) => (
         <Cluster
           key={i}
-          len={cluster.items.length}
+          length={cluster.items.length}
           expanded={clusterIsExpanded(i)}
           onFocus={() => void setFocused(i)}
         >
           {cluster.items.map((item, j) => (
             <Item
               key={item.path}
-              j={j}
+              indexInCluster={j}
               selected={itemIsSelected(i, j)}
               {...item}
             />
@@ -97,48 +99,39 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
 
 export function Cluster({
   children,
-  len,
+  length,
   expanded,
   onFocus,
 }: {
   children: ReactFragment;
-  len: number;
+  length: number;
   expanded: boolean;
   onFocus: () => void;
 }) {
   const self = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    self.current!.style.setProperty("--len", String(len));
-  }, [len]);
-
-  const classes = ["Cluster"];
-
-  if (expanded) {
-    classes.push("expanded");
-  }
-
   return (
-    <div ref={self} className={classes.join(" ")} onFocus={onFocus}>
+    <div
+      ref={self}
+      className={classNames("Cluster", { expanded })}
+      style={{ "--length": length }}
+      onFocus={onFocus}
+    >
       {children}
     </div>
   );
 }
 
 export function Item({
-  j,
+  indexInCluster,
   selected,
   path,
   x,
   y,
-}: { j: number; selected: boolean } & ItemMeta) {
+}: { indexInCluster: number; selected: boolean } & ItemMeta) {
   const { push } = usePath();
   const self = useRef<HTMLAnchorElement>(null);
   const previous = usePrevious(selected);
-
-  useLayoutEffect(() => {
-    self.current!.style.setProperty("--j", String(j));
-  }, [j]);
 
   useLayoutEffect(() => {
     if (selected) {
@@ -167,16 +160,11 @@ export function Item({
     }
   }, [selected]);
 
-  const classes = ["Item"];
-
-  if (selected) {
-    classes.push("selected");
-  }
-
   return (
     <a
       ref={self}
-      className={classes.join(" ")}
+      className={classNames("Item", { selected })}
+      style={{ "--index": indexInCluster }}
       href={path}
       onClick={click}
       onFocus={focus}
