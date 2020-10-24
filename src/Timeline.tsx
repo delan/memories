@@ -4,30 +4,85 @@ import React, {
   useLayoutEffect,
   MouseEvent,
   WheelEvent,
+  ReactFragment,
+  useState,
+  useMemo,
 } from "react";
 import { usePath } from "./path";
 import { ClusterMeta, ItemMeta } from "./data";
 
 export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
-  const { path } = usePath();
+  const { path, push } = usePath();
   const self = useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = useState<number | null>(null);
+
+  const reverse = useMemo(() => {
+    const result = new Map<string, [number, number]>();
+    clusters.forEach((cluster, i) => {
+      cluster.items.forEach(({ path }, j) => {
+        result.set(path, [i, j]);
+      });
+    });
+    return result;
+  }, [clusters]);
+
+  const flat = useMemo(
+    () =>
+      clusters
+        .flatMap((cluster) => cluster.items)
+        .sort((p, q) => p.index - q.index),
+    [clusters],
+  );
 
   return (
     <div ref={self} onWheel={wheel} className="Timeline">
-      {clusters.map(({ ...rest }, i) => (
-        <Cluster key={i} {...rest} />
+      {clusters.map((cluster, i) => (
+        <Cluster
+          key={i}
+          len={cluster.items.length}
+          expanded={clusterIsExpanded(i)}
+          onFocus={() => void setFocused(i)}
+        >
+          {cluster.items.map((item, j) => (
+            <Item
+              key={item.path}
+              j={j}
+              selected={itemIsSelected(i, j)}
+              {...item}
+            />
+          ))}
+        </Cluster>
       ))}
     </div>
   );
 
-  function get(path: string | null): HTMLElement {
-    return self.current!.querySelector(`[data-src="${path}"]`) as HTMLElement;
+  function clusterIsExpanded(i: number): boolean {
+    return i == focused || clusterIsSelected(i);
   }
 
-  function getByIndex(index: number): HTMLElement {
-    return self.current!.querySelector(
-      `[data-index="${index}"]`,
-    ) as HTMLElement;
+  function clusterIsSelected(i: number): boolean {
+    if (path == null || !reverse.has(path)) {
+      return false;
+    }
+
+    return i == reverse.get(path)![0];
+  }
+
+  function itemIsSelected(i: number, j: number): boolean {
+    return clusterIsSelected(i) && j == reverse.get(path!)![1];
+  }
+
+  function move(delta: number) {
+    if (path == null || !reverse.has(path)) {
+      return;
+    }
+
+    const [i, j] = reverse.get(path)!;
+    const index = clusters[i].items[j].index + delta;
+
+    if (index in flat) {
+      push(flat[index].path);
+    }
   }
 
   function wheel(event: WheelEvent<HTMLElement>) {
@@ -36,50 +91,57 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
     }
 
     event.preventDefault();
-
-    const index = get(path)?.dataset.index;
-
-    if (index == null) {
-      return;
-    }
-
-    getByIndex(Number(index) + Math.sign(event.deltaY))?.click();
+    move(Math.sign(event.deltaY));
   }
 }
 
-export function Cluster({ items }: ClusterMeta) {
-  const { path: selected } = usePath();
+export function Cluster({
+  children,
+  len,
+  expanded,
+  onFocus,
+}: {
+  children: ReactFragment;
+  len: number;
+  expanded: boolean;
+  onFocus: () => void;
+}) {
   const self = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    self.current!.style.setProperty("--len", String(len));
+  }, [len]);
+
   const classes = ["Cluster"];
 
-  useEffect(() => {
-    self.current!.style.setProperty("--len", String(items.length));
-  }, [items.length]);
-
-  if (items.some(({ path }) => path == selected)) {
-    classes.push("selected");
+  if (expanded) {
+    classes.push("expanded");
   }
 
   return (
-    <div ref={self} className={classes.join(" ")}>
-      {[...items].map(({ path, ...rest }, i) => (
-        <Item key={path} i={i} path={path} {...rest} />
-      ))}
+    <div ref={self} className={classes.join(" ")} onFocus={onFocus}>
+      {children}
     </div>
   );
 }
 
-export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
-  const { path: selected, push } = usePath();
+export function Item({
+  j,
+  selected,
+  path,
+  x,
+  y,
+}: { j: number; selected: boolean } & ItemMeta) {
+  const { push } = usePath();
   const self = useRef<HTMLAnchorElement>(null);
   const previous = usePrevious(selected);
 
   useLayoutEffect(() => {
-    self.current!.style.setProperty("--i", String(i));
-  }, [i]);
+    self.current!.style.setProperty("--j", String(j));
+  }, [j]);
 
   useLayoutEffect(() => {
-    if (path == selected) {
+    if (selected) {
       self.current!.scrollIntoView({
         inline: "center",
         block: "center",
@@ -89,13 +151,13 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
   }, []);
 
   useEffect(() => {
-    if (path == selected) {
+    if (selected) {
       self.current!.focus({
         // shouldn’t be load-bearing; just for efficiency
         preventScroll: true,
       });
 
-      if (path != previous) {
+      if (!previous) {
         self.current!.scrollIntoView({
           inline: "center",
           block: "center",
@@ -107,7 +169,7 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
 
   const classes = ["Item"];
 
-  if (path == selected) {
+  if (selected) {
     classes.push("selected");
   }
 
@@ -116,8 +178,6 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
       ref={self}
       className={classes.join(" ")}
       href={path}
-      data-index={index}
-      data-src={path}
       onClick={click}
       onFocus={focus}
     >
@@ -129,11 +189,11 @@ export function Item({ i, index, path, x, y }: { i: number } & ItemMeta) {
 
   function click(event: MouseEvent<HTMLElement>) {
     event.preventDefault();
-    push(event.currentTarget.dataset.src!);
+    push(path);
   }
 
   function focus() {
-    if (path != selected || path == previous) {
+    if (!selected || previous) {
       self.current!.scrollIntoView({
         inline: "nearest",
         block: "nearest",
