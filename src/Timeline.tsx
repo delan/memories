@@ -233,7 +233,7 @@ const Cluster = forwardRef<
     expanded: boolean;
     onFocus: () => void;
   }
->(({ children, length, expanded, onFocus }, ref) => {
+>(function Cluster0({ children, length, expanded, onFocus }, ref) {
   return (
     <div
       ref={ref}
