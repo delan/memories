@@ -71,25 +71,27 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
   );
 
   // prettier-ignore
-  function shouldFix(i: number): boolean {
-    const selected = path != null && reverse.has(path) ? reverse.get(path)![0] : null;
-    const selectedOld = pathOld != null && reverse.has(pathOld) ? reverse.get(pathOld)![0] : null;
+  function shouldFix(clusterIndex: number): boolean {
+    const isExpanded = clusterIsExpanded(clusterIndex);
+    const wasExpanded = clusterWasExpanded(clusterIndex);
 
-    if (clusterIsExpanded(i) != clusterWasExpanded(i)) {
-      const expandedNotCollapsed = clusterIsExpanded(i);
-      const dueToSelectedChange = clusterIsSelected(i) != clusterWasSelected(i);
-      const dueToFocusedChange = clusterIsFocused(i) != clusterWasFocused(i);
-      const clusterNew = dueToSelectedChange ? selected : dueToFocusedChange ? focused : null;
+    if (isExpanded != wasExpanded) {
+      const dueToSelectedChange = clusterIsSelected(clusterIndex) != clusterWasSelected(clusterIndex);
+      const dueToFocusedChange = clusterIsFocused(clusterIndex) != clusterWasFocused(clusterIndex);
+      const selectedNew = path != null && reverse.has(path) ? reverse.get(path)![0] : null;
+      const selectedOld = pathOld != null && reverse.has(pathOld) ? reverse.get(pathOld)![0] : null;
+      const clusterNew = dueToSelectedChange ? selectedNew : dueToFocusedChange ? focused : null;
       const clusterOld = dueToSelectedChange ? selectedOld : dueToFocusedChange ? focusedOld : null;
       const potentiallyFixable = clusterNew != null && clusterOld != null;
 
       if (potentiallyFixable) {
-        const clusterNewIsOnLeft = potentiallyFixable && clusterNew! < clusterOld!;
-        const clusterNewIsOnRight = potentiallyFixable && clusterNew! > clusterOld!;
+        const clusterNewIsOnLeft = clusterNew! < clusterOld!;
+        const clusterNewIsOnRight = clusterNew! > clusterOld!;
+
         console.log(
           [
-            `cluster ${i}`,
-            expandedNotCollapsed ? "expanded" : "collapsed",
+            `cluster ${clusterIndex}`,
+            isExpanded ? "expanded" : "collapsed",
             `due to ${
               dueToSelectedChange ? "a selected"
               : dueToFocusedChange ? "a focused"
@@ -103,10 +105,12 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
           ].join(" "),
         );
 
-        if (expandedNotCollapsed && clusterNewIsOnLeft) {
+        const didExpand = isExpanded, didCollapse = !isExpanded;
+
+        if (didExpand && clusterNewIsOnLeft) {
           // scroll right to compensate, and width delta is positive, so scroll by delta
           return true;
-        } else if (!expandedNotCollapsed && clusterNewIsOnRight) {
+        } else if (didCollapse && clusterNewIsOnRight) {
           // scroll left to compensate, and width delta is negative, so scroll by delta
           return true;
         }
@@ -116,39 +120,43 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
     return false;
   }
 
-  function clusterIsExpanded(i: number): boolean {
-    return clusterIsSelected(i) || clusterIsFocused(i);
+  function clusterIsExpanded(clusterIndex: number): boolean {
+    return clusterIsSelected(clusterIndex) || clusterIsFocused(clusterIndex);
   }
 
-  function clusterWasExpanded(i: number): boolean {
-    return clusterWasSelected(i) || clusterWasFocused(i);
+  function clusterWasExpanded(clusterIndex: number): boolean {
+    return clusterWasSelected(clusterIndex) || clusterWasFocused(clusterIndex);
   }
 
-  function clusterIsFocused(i: number, which = focused): boolean {
-    return i == which;
+  function clusterIsFocused(clusterIndex: number, which = focused): boolean {
+    return clusterIndex == which;
   }
 
-  function clusterWasFocused(i: number): boolean {
-    return clusterIsFocused(i, focusedOld);
+  function clusterWasFocused(clusterIndex: number): boolean {
+    return clusterIsFocused(clusterIndex, focusedOld);
   }
 
-  function clusterIsSelected(i: number, which = path): boolean {
+  function clusterIsSelected(clusterIndex: number, which = path): boolean {
     if (which == null || !reverse.has(which)) {
       return false;
     }
 
-    return i == reverse.get(which)![0];
+    return clusterIndex == reverse.get(which)![0];
   }
 
-  function clusterWasSelected(i: number): boolean {
-    return clusterIsSelected(i, pathOld);
+  function clusterWasSelected(clusterIndex: number): boolean {
+    return clusterIsSelected(clusterIndex, pathOld);
   }
 
-  function itemIsSelected(i: number, j: number): boolean {
-    return clusterIsSelected(i) && j == reverse.get(path!)![1];
+  function itemIsSelected(clusterIndex: number, itemIndex: number): boolean {
+    if (!clusterIsSelected(clusterIndex)) {
+      return false;
+    }
+
+    return itemIndex == reverse.get(path!)![1];
   }
 
-  function move(delta: number) {
+  function navigate(delta: number) {
     if (path == null || !reverse.has(path)) {
       return;
     }
@@ -167,7 +175,7 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
     }
 
     event.preventDefault();
-    move(Math.sign(event.deltaY));
+    navigate(Math.sign(event.deltaY));
   }
 }
 
