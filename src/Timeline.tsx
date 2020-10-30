@@ -247,9 +247,9 @@ function Item({
   x,
   y,
 }: { indexInCluster: number; selected: boolean } & ItemMeta) {
-  const { push } = usePath();
+  // const { push } = usePath();
   const self = useRef<HTMLAnchorElement>(null);
-  const previous = usePrevious(selected);
+  // const previous = usePrevious(selected);
 
   useLayoutEffect(() => {
     if (selected) {
@@ -268,13 +268,13 @@ function Item({
         preventScroll: true,
       });
 
-      if (!previous) {
-        // self.current!.scrollIntoView({
-        //   inline: "center",
-        //   block: "center",
-        //   behavior: "smooth",
-        // });
-      }
+      // if (!previous) {
+      //   self.current!.scrollIntoView({
+      //     inline: "center",
+      //     block: "center",
+      //     behavior: "smooth",
+      //   });
+      // }
     }
   }, [selected]);
 
@@ -295,17 +295,17 @@ function Item({
 
   function click(event: MouseEvent<HTMLElement>) {
     event.preventDefault();
-    push(path);
+    // push(path);
   }
 
   function focus() {
-    if (!selected || previous) {
-      // self.current!.scrollIntoView({
-      //   inline: "nearest",
-      //   block: "nearest",
-      //   behavior: "smooth",
-      // });
-    }
+    // if (!selected || previous) {
+    //   self.current!.scrollIntoView({
+    //     inline: "nearest",
+    //     block: "nearest",
+    //     behavior: "smooth",
+    //   });
+    // }
   }
 }
 
