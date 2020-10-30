@@ -174,7 +174,6 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
       return;
     }
 
-    event.preventDefault();
     navigate(Math.sign(event.deltaY));
   }
 }
