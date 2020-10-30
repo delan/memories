@@ -11,6 +11,7 @@ import React, {
   RefObject,
   forwardRef,
   memo,
+  useCallback,
 } from "react";
 import classNames from "classnames";
 
@@ -59,6 +60,7 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
                   key={item.path}
                   indexInCluster={j}
                   selected={itemIsSelected(i, j)}
+                  push={useCallback(push, [])}
                   {...item}
                 />
               ))}
@@ -244,11 +246,15 @@ const Cluster = forwardRef<
 const Item = memo(function Item0({
   indexInCluster,
   selected,
+  push,
   path,
   x,
   y,
-}: { indexInCluster: number; selected: boolean } & ItemMeta) {
-  // const { push } = usePath();
+}: {
+  indexInCluster: number;
+  selected: boolean;
+  push: (_: string) => void;
+} & ItemMeta) {
   const self = useRef<HTMLAnchorElement>(null);
   // const previous = usePrevious(selected);
 
@@ -296,7 +302,7 @@ const Item = memo(function Item0({
 
   function click(event: MouseEvent<HTMLElement>) {
     event.preventDefault();
-    // push(path);
+    push(path);
   }
 
   function focus() {
