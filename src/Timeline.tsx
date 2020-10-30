@@ -10,6 +10,7 @@ import React, {
   Component,
   RefObject,
   forwardRef,
+  memo,
 } from "react";
 import classNames from "classnames";
 
@@ -240,7 +241,7 @@ const Cluster = forwardRef<
   );
 });
 
-function Item({
+const Item = memo(function Item0({
   indexInCluster,
   selected,
   path,
@@ -307,7 +308,7 @@ function Item({
     //   });
     // }
   }
-}
+});
 
 function usePrevious<T>(value: T) {
   const state = useRef<Partial<T>>({});
