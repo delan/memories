@@ -9,7 +9,6 @@ import React, {
   useMemo,
   Component,
   RefObject,
-  createRef,
   forwardRef,
 } from "react";
 import classNames from "classnames";
@@ -43,11 +42,10 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
 
   return (
     <div ref={self} onWheel={wheel} className="Timeline">
-      {clusters.map((cluster, i) => (
-        <ScrollFix
-          key={i}
-          shouldFix={() => shouldFix(i)}
-          render={(target) => (
+      {clusters.map((cluster, i) => {
+        const target = useRef(null);
+        return (
+          <ScrollFix key={i} target={target} shouldFix={shouldFix(i)}>
             <Cluster
               key={i}
               ref={target}
@@ -64,9 +62,9 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
                 />
               ))}
             </Cluster>
-          )}
-        />
-      ))}
+          </ScrollFix>
+        );
+      })}
     </div>
   );
 
@@ -180,15 +178,12 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
 
 // FIXME how do i make this typeck without the HTMLDivElement bound :c
 class ScrollFix<T extends HTMLDivElement> extends Component<ScrollFixProps<T>> {
-  target: RefObject<T>;
-
   constructor(props: ScrollFixProps<T>) {
     super(props);
-    this.target = createRef();
   }
 
   getSnapshotBeforeUpdate(): number | null {
-    if (this.props.shouldFix()) {
+    if (this.props.shouldFix) {
       return this._measure();
     }
 
@@ -211,17 +206,17 @@ class ScrollFix<T extends HTMLDivElement> extends Component<ScrollFixProps<T>> {
   }
 
   render() {
-    return this.props.render(this.target);
+    return this.props.children;
   }
 
   _measure() {
-    return this.target.current!.getBoundingClientRect().width;
+    return this.props.target.current!.getBoundingClientRect().width;
   }
 }
 
 interface ScrollFixProps<T> {
-  render: (target: RefObject<T>) => ReactFragment;
-  shouldFix: () => boolean;
+  target: RefObject<T>;
+  shouldFix: boolean;
 }
 
 const Cluster = forwardRef<
