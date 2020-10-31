@@ -53,7 +53,8 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
               ref={target}
               length={cluster.items.length}
               expanded={clusterIsExpanded(i)}
-              onFocus={() => void setFocused(i)}
+              onFocus={setFocused}
+              onFocusArg={i}
             >
               {cluster.items.map((item, j) => (
                 <Item
@@ -228,15 +229,16 @@ const Cluster = forwardRef<
     children: ReactFragment;
     length: number;
     expanded: boolean;
-    onFocus: () => void;
+    onFocus: (_: number) => void;
+    onFocusArg: number;
   }
->(function Cluster0({ children, length, expanded, onFocus }, ref) {
+>(function Cluster0({ children, length, expanded, onFocus, onFocusArg }, ref) {
   return (
     <div
       ref={ref}
       className={classNames("Cluster", { expanded })}
       style={{ "--length": length }}
-      onFocus={onFocus}
+      onFocus={() => void onFocus(onFocusArg)}
     >
       {children}
     </div>
