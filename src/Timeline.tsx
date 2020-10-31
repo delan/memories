@@ -1,17 +1,14 @@
 import React, {
-  useEffect,
-  useRef,
-  useLayoutEffect,
   MouseEvent,
   WheelEvent,
   ReactFragment,
-  useState,
-  useMemo,
   Component,
   RefObject,
   forwardRef,
   memo,
   useCallback,
+  createRef,
+  FocusEvent,
 } from "react";
 import classNames from "classnames";
 
@@ -20,207 +17,299 @@ import { ClusterMeta, ItemMeta } from "./data";
 
 export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
   const { path, push } = usePath();
-  const self = useRef<HTMLDivElement>(null);
-  const [focused, setFocused] = useState<number | null>(null);
-  const { path: pathOld, focused: focusedOld } = usePrevious({ path, focused });
+  return (
+    <Timeline0 clusters={clusters} path={path} push={useCallback(push, [])} />
+  );
+}
 
-  const reverse = useMemo(() => {
-    const result = new Map<string, [number, number]>();
-    clusters.forEach((cluster, i) => {
+class Timeline0 extends Component<TimelineProps, TimelineState> {
+  _reverse: Map<string, [number, number]>;
+  _flat: ItemMeta[];
+  _deferScroll: boolean;
+  _self: RefObject<HTMLDivElement>;
+  _clusters: RefObject<HTMLDivElement>[];
+  _items: Map<string, RefObject<HTMLAnchorElement>>;
+
+  constructor(props: TimelineProps) {
+    super(props);
+    this.state = {
+      focused: null,
+    };
+
+    this._focus = this._focus.bind(this);
+    this._wheel = this._wheel.bind(this);
+
+    this._reverse = new Map();
+    props.clusters.forEach((cluster, i) => {
       cluster.items.forEach((item, j) => {
-        result.set(item.path, [i, j]);
+        this._reverse.set(item.path, [i, j]);
       });
     });
-    return result;
-  }, [clusters]);
 
-  const flat = useMemo(
-    () =>
-      clusters
-        .flatMap((cluster) => cluster.items)
-        .sort((p, q) => p.index - q.index),
-    [clusters],
-  );
+    this._flat = props.clusters
+      .flatMap((cluster) => cluster.items)
+      .sort((p, q) => p.index - q.index);
 
-  return (
-    <div ref={self} onWheel={wheel} className="Timeline">
-      {clusters.map((cluster, i) => {
-        const target = useRef(null);
-        return (
-          <ScrollFix key={i} target={target} shouldFix={shouldFix(i)}>
+    this._deferScroll = false;
+    this._self = createRef();
+    this._clusters = props.clusters.map(() => createRef());
+    this._items = new Map(
+      [...this._reverse.keys()].map((path) => [path, createRef()]),
+    );
+  }
+
+  render() {
+    const { clusters, path, push } = this.props;
+    const { focused } = this.state;
+
+    while (this._clusters.length < clusters.length) {
+      this._clusters.push(createRef());
+    }
+
+    while (this._clusters.length < clusters.length) {
+      this._clusters.push(createRef());
+    }
+
+    return (
+      <div ref={this._self} onWheel={this._wheel} className="Timeline">
+        {clusters.map((cluster, i) => {
+          return (
             <Cluster
               key={i}
-              ref={target}
+              ref={this._clusters[i]}
               length={cluster.items.length}
-              expanded={clusterIsExpanded(i)}
-              onFocus={setFocused}
-              onFocusArg={i}
+              expanded={this._clusterIsExpanded(i, path, focused)}
             >
               {cluster.items.map((item, j) => (
                 <Item
                   key={item.path}
+                  ref={this._items.get(item.path)}
                   indexInCluster={j}
-                  selected={itemIsSelected(i, j)}
-                  push={useCallback(push, [])}
+                  selected={this._itemIsSelected(i, j)}
+                  push={push}
+                  onFocus={this._focus}
+                  onFocusArg={i}
                   {...item}
                 />
               ))}
             </Cluster>
-          </ScrollFix>
-        );
-      })}
-    </div>
-  );
+          );
+        })}
+      </div>
+    );
+  }
 
   // prettier-ignore
-  function shouldFix(clusterIndex: number): boolean {
-    const isExpanded = clusterIsExpanded(clusterIndex);
-    const wasExpanded = clusterWasExpanded(clusterIndex);
+  getSnapshotBeforeUpdate({ path: pathOld }: TimelineProps, { focused: focusedOld }: TimelineState): TimelineSnapshot | null {
+    const { path: pathNew } = this.props;
+    const { focused: focusedNew } = this.state;
+    console.log(`Timeline: gSBU: focusedNew=${focusedNew} focusedOld=${focusedOld}`);
+    const selectedNew = this._getSelectedCluster(pathNew);
+    const selectedOld = this._getSelectedCluster(pathOld);
+    const selectedChanged = selectedNew != selectedOld;
+    const focusedChanged = focusedNew != focusedOld;
+    const clusterNew = selectedChanged ? selectedNew : focusedChanged ? focusedNew : null;
+    const clusterOld = selectedChanged ? selectedOld : focusedChanged ? focusedOld : null;
+    const potentiallyFixable = clusterNew != null && clusterOld != null;
 
-    if (isExpanded != wasExpanded) {
-      const dueToSelectedChange = clusterIsSelected(clusterIndex) != clusterWasSelected(clusterIndex);
-      const dueToFocusedChange = clusterIsFocused(clusterIndex) != clusterWasFocused(clusterIndex);
-      const selectedNew = path != null && reverse.has(path) ? reverse.get(path)![0] : null;
-      const selectedOld = pathOld != null && reverse.has(pathOld) ? reverse.get(pathOld)![0] : null;
-      const clusterNew = dueToSelectedChange ? selectedNew : dueToFocusedChange ? focused : null;
-      const clusterOld = dueToSelectedChange ? selectedOld : dueToFocusedChange ? focusedOld : null;
-      const potentiallyFixable = clusterNew != null && clusterOld != null;
+    if (potentiallyFixable) {
+      const clusterNewIsOnLeft = clusterNew! < clusterOld!;
+      const clusterNewIsOnRight = clusterNew! > clusterOld!;
 
-      if (potentiallyFixable) {
-        const clusterNewIsOnLeft = clusterNew! < clusterOld!;
-        const clusterNewIsOnRight = clusterNew! > clusterOld!;
+      const clusterLeft = Math.min(clusterNew!, clusterOld!);
+      const clusterLeftIsExpanded = this._clusterIsExpanded(clusterLeft, pathNew, focusedNew);
+      const clusterLeftWasExpanded = this._clusterIsExpanded(clusterLeft, pathOld, focusedOld);
+      const clusterLeftChanged = clusterLeftIsExpanded != clusterLeftWasExpanded;
 
-        console.log(
-          [
-            `cluster ${clusterIndex}`,
-            isExpanded ? "expanded" : "collapsed",
-            `due to ${
-              dueToSelectedChange ? "a selected"
-              : dueToFocusedChange ? "a focused"
-              : "an impossible"
-            } change`,
-            `and the new expanded cluster is ${
-              clusterNewIsOnLeft ? "on the left"
-              : clusterNewIsOnRight ? "on the right"
-              : "in an impossible direction"
-            }`,
-          ].join(" "),
-        );
+      console.log([
+        `Timeline: gSBU:`,
+        `${selectedChanged ? "selected" : focusedChanged ? "focused" : "unknown"}`,
+        `clusterNew=${clusterNew} clusterOld=${clusterOld}`,
+        `${clusterNewIsOnLeft ? "left" : clusterNewIsOnRight ? "right" : "unknown"}`,
+        `clusterLeft=${clusterLeft} clusterLeftChanged=${clusterLeftChanged}`,
+        `(${clusterLeftWasExpanded} to ${clusterLeftIsExpanded})`,
+      ].join(" "));
 
-        const didExpand = isExpanded, didCollapse = !isExpanded;
-
-        if (didExpand && clusterNewIsOnLeft) {
-          // scroll right to compensate, and width delta is positive, so scroll by delta
-          return true;
-        } else if (didCollapse && clusterNewIsOnRight) {
-          // scroll left to compensate, and width delta is negative, so scroll by delta
-          return true;
-        }
+      if (clusterLeftChanged) {
+        const oldSize = this._measure(clusterLeft);
+        return { clusterLeft, oldSize };
       }
-    }
-
-    return false;
-  }
-
-  function clusterIsExpanded(clusterIndex: number): boolean {
-    return clusterIsSelected(clusterIndex) || clusterIsFocused(clusterIndex);
-  }
-
-  function clusterWasExpanded(clusterIndex: number): boolean {
-    return clusterWasSelected(clusterIndex) || clusterWasFocused(clusterIndex);
-  }
-
-  function clusterIsFocused(clusterIndex: number, which = focused): boolean {
-    return clusterIndex == which;
-  }
-
-  function clusterWasFocused(clusterIndex: number): boolean {
-    return clusterIsFocused(clusterIndex, focusedOld);
-  }
-
-  function clusterIsSelected(clusterIndex: number, which = path): boolean {
-    if (which == null || !reverse.has(which)) {
-      return false;
-    }
-
-    return clusterIndex == reverse.get(which)![0];
-  }
-
-  function clusterWasSelected(clusterIndex: number): boolean {
-    return clusterIsSelected(clusterIndex, pathOld);
-  }
-
-  function itemIsSelected(clusterIndex: number, itemIndex: number): boolean {
-    if (!clusterIsSelected(clusterIndex)) {
-      return false;
-    }
-
-    return itemIndex == reverse.get(path!)![1];
-  }
-
-  function navigate(delta: number) {
-    if (path == null || !reverse.has(path)) {
-      return;
-    }
-
-    const [i, j] = reverse.get(path)!;
-    const index = clusters[i].items[j].index + delta;
-
-    if (index in flat) {
-      push(flat[index].path);
-    }
-  }
-
-  function wheel(event: WheelEvent<HTMLElement>) {
-    if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
-      return;
-    }
-
-    navigate(Math.sign(event.deltaY));
-  }
-}
-
-// FIXME how do i make this typeck without the HTMLDivElement bound :c
-class ScrollFix<T extends HTMLDivElement> extends Component<ScrollFixProps<T>> {
-  constructor(props: ScrollFixProps<T>) {
-    super(props);
-  }
-
-  getSnapshotBeforeUpdate(): number | null {
-    if (this.props.shouldFix) {
-      return this._measure();
     }
 
     return null;
   }
 
-  componentDidUpdate(
-    _props: unknown,
-    _state: unknown,
-    snapshot: ReturnType<ScrollFix<T>["getSnapshotBeforeUpdate"]>,
+  _focus(
+    clusterIndex: number,
+    path: string,
+    event: FocusEvent<HTMLAnchorElement>,
   ) {
-    if (snapshot == null) {
+    console.log(`Timeline: _focus: focus on Item path=${path}`);
+    scroll(`path=${path}`, event.target, "nearest", false);
+    this.setState({ focused: clusterIndex });
+  }
+
+  _fixScroll({ clusterLeft, oldSize }: Required<TimelineSnapshot>) {
+    const newSize = this._measure(clusterLeft);
+
+    if (newSize == null) {
       return;
     }
 
-    const current = this._measure();
-    const delta = current - snapshot;
-    console.log(`was ${snapshot} now ${current} delta ${delta}`);
+    const delta = newSize - oldSize;
+    console.log(
+      `Timeline: cDU: _fixScroll: was ${oldSize} now ${newSize} delta ${delta}`,
+    );
     scrollBy(delta, 0);
   }
 
-  render() {
-    return this.props.children;
+  componentDidUpdate(
+    { path: pathOld }: TimelineProps,
+    _: TimelineState,
+    snapshot: TimelineSnapshot | null,
+  ) {
+    const shouldFix = snapshot?.oldSize != null;
+
+    if (shouldFix) {
+      this._fixScroll(snapshot as Required<TimelineSnapshot>); // FIXME
+    }
+
+    const { path: pathNew } = this.props;
+
+    if (pathNew != null) {
+      const item = this._items.get(pathNew)?.current;
+
+      if (item == null) {
+        return;
+      }
+
+      if (this._deferScroll) {
+        scroll(`path=${pathNew}`, item, "center", false);
+        this._deferScroll = false;
+      }
+
+      if (pathNew != pathOld) {
+        item?.focus({
+          // this option shouldn’t be load-bearing (just for efficiency)
+          preventScroll: true,
+        });
+
+        if (
+          this._getSelectedCluster(pathNew) ==
+            this._getSelectedCluster(pathOld) ||
+          shouldFix
+        ) {
+          scroll(`path=${pathNew}`, item, "center", false);
+        } else {
+          this._deferScroll = true;
+        }
+      }
+    }
   }
 
-  _measure() {
-    return this.props.target.current!.getBoundingClientRect().width;
+  componentDidMount() {
+    const { path } = this.props;
+
+    if (path != null) {
+      const item = this._items.get(path)?.current;
+
+      if (item != null) {
+        item.focus({
+          // this option shouldn’t be load-bearing (just for efficiency)
+          preventScroll: true,
+        });
+
+        scroll(`path=${path}`, item, "center", false);
+      }
+    }
+  }
+
+  _measure(clusterIndex: number): number | undefined {
+    return this._clusters[clusterIndex].current?.getBoundingClientRect().width;
+  }
+
+  _getSelectedCluster(path: string | null): number | null {
+    if (path == null || !this._reverse.has(path)) {
+      return null;
+    }
+
+    return this._reverse.get(path)![0];
+  }
+
+  _clusterIsExpanded(
+    clusterIndex: number,
+    whichPath: TimelineProps["path"],
+    whichFocused: TimelineState["focused"],
+  ): boolean {
+    return (
+      this._clusterIsSelected(clusterIndex, whichPath) ||
+      this._clusterIsFocused(clusterIndex, whichFocused)
+    );
+  }
+
+  _clusterIsFocused(
+    clusterIndex: number,
+    whichFocused: TimelineState["focused"],
+  ): boolean {
+    return clusterIndex == whichFocused;
+  }
+
+  _clusterIsSelected(
+    clusterIndex: number,
+    whichPath: TimelineProps["path"],
+  ): boolean {
+    if (whichPath == null || !this._reverse.has(whichPath)) {
+      return false;
+    }
+
+    return clusterIndex == this._reverse.get(whichPath)![0];
+  }
+
+  _itemIsSelected(clusterIndex: number, itemIndex: number): boolean {
+    if (!this._clusterIsSelected(clusterIndex, this.props.path)) {
+      return false;
+    }
+
+    return itemIndex == this._reverse.get(this.props.path!)![1];
+  }
+
+  _navigate(delta: number) {
+    const { clusters, path, push } = this.props;
+
+    if (path == null || !this._reverse.has(path)) {
+      return;
+    }
+
+    const [i, j] = this._reverse.get(path)!;
+    const index = clusters[i].items[j].index + delta;
+
+    if (index in this._flat) {
+      push(this._flat[index].path);
+    }
+  }
+
+  _wheel(event: WheelEvent<HTMLElement>) {
+    if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+      return;
+    }
+
+    this._navigate(Math.sign(event.deltaY));
   }
 }
 
-interface ScrollFixProps<T> {
-  target: RefObject<T>;
-  shouldFix: boolean;
+interface TimelineProps {
+  clusters: ClusterMeta[];
+  path: string | null;
+  push: (_: string) => void;
+}
+
+interface TimelineState {
+  focused: number | null;
+}
+
+interface TimelineSnapshot {
+  clusterLeft: number;
+  oldSize?: number;
 }
 
 const Cluster = forwardRef<
@@ -229,101 +318,74 @@ const Cluster = forwardRef<
     children: ReactFragment;
     length: number;
     expanded: boolean;
-    onFocus: (_: number) => void;
-    onFocusArg: number;
   }
->(function Cluster0({ children, length, expanded, onFocus, onFocusArg }, ref) {
+>(function Cluster0({ children, length, expanded }, ref) {
   return (
     <div
       ref={ref}
       className={classNames("Cluster", { expanded })}
       style={{ "--length": length }}
-      onFocus={() => void onFocus(onFocusArg)}
     >
       {children}
     </div>
   );
 });
 
-const Item = memo(function Item0({
-  indexInCluster,
-  selected,
-  push,
-  path,
-  x,
-  y,
-}: {
-  indexInCluster: number;
-  selected: boolean;
-  push: (_: string) => void;
-} & ItemMeta) {
-  const self = useRef<HTMLAnchorElement>(null);
-  // const previous = usePrevious(selected);
+const Item = memo(
+  forwardRef<
+    HTMLAnchorElement,
+    {
+      indexInCluster: number;
+      selected: boolean;
+      push: (_: string) => void;
+      onFocus: (
+        _: number,
+        path: string,
+        event: FocusEvent<HTMLAnchorElement>,
+      ) => void;
+      onFocusArg: number;
+    } & ItemMeta
+  >(function Item0(
+    { indexInCluster, selected, push, onFocus, onFocusArg, path, x, y },
+    ref,
+  ) {
+    return (
+      <a
+        ref={ref}
+        className={classNames("Item", { selected })}
+        style={{ "--index": indexInCluster }}
+        href={path}
+        onClick={click}
+        onFocus={(event) => void onFocus(onFocusArg, path, event)}
+      >
+        <svg viewBox={`0 0 ${x} ${y}`} preserveAspectRatio="xMaxYMid slice">
+          <image width={x} height={y} href={`i/${path}.png`} />
+        </svg>
+      </a>
+    );
 
-  useLayoutEffect(() => {
-    if (selected) {
-      self.current!.scrollIntoView({
-        inline: "center",
-        block: "center",
-        behavior: "auto",
-      });
+    function click(event: MouseEvent<HTMLElement>) {
+      event.preventDefault();
+      push(path);
     }
-  }, []);
+  }),
+);
 
-  useEffect(() => {
-    if (selected) {
-      self.current!.focus({
-        // shouldn’t be load-bearing; just for efficiency
-        preventScroll: true,
-      });
-
-      // if (!previous) {
-      //   self.current!.scrollIntoView({
-      //     inline: "center",
-      //     block: "center",
-      //     behavior: "smooth",
-      //   });
-      // }
-    }
-  }, [selected]);
-
-  return (
-    <a
-      ref={self}
-      className={classNames("Item", { selected })}
-      style={{ "--index": indexInCluster }}
-      href={path}
-      onClick={click}
-      onFocus={focus}
-    >
-      <svg viewBox={`0 0 ${x} ${y}`} preserveAspectRatio="xMaxYMid slice">
-        <image width={x} height={y} href={`i/${path}.png`} />
-      </svg>
-    </a>
+function scroll(
+  label: string,
+  element: HTMLElement,
+  where: "center" | "nearest",
+  smooth: boolean,
+) {
+  const behavior = smooth ? "smooth" : "auto";
+  console.log(
+    `scroll: scrolling to ${label} (${where}, ${
+      smooth ? "smooth" : "instant"
+    })`,
   );
-
-  function click(event: MouseEvent<HTMLElement>) {
-    event.preventDefault();
-    push(path);
-  }
-
-  function focus() {
-    // if (!selected || previous) {
-    //   self.current!.scrollIntoView({
-    //     inline: "nearest",
-    //     block: "nearest",
-    //     behavior: "smooth",
-    //   });
-    // }
-  }
-});
-
-function usePrevious<T>(value: T) {
-  const state = useRef<Partial<T>>({});
-
-  useEffect(() => {
-    state.current = value;
+  element.scrollIntoView({
+    inline: where,
+    block: where,
+    behavior,
   });
-
-  return state.current;
 }
