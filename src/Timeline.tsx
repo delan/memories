@@ -168,6 +168,7 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
     console.log(
       `Timeline: _focus: focus on Item path=${path} focused=${this.state.focused} clusterIndex=${clusterIndex}`,
     );
+
     scroll(`path=${path}`, event.target, "nearest", false);
 
     // try to avoid a cascading update (see #getDerivedStateFromProps)
@@ -186,6 +187,12 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
     const delta = newSize - oldSize;
     console.log(
       `Timeline: cDU: _fixScroll: was ${oldSize} now ${newSize} delta ${delta}`,
+    );
+
+    addEventListener(
+      "scroll",
+      () => void console.log("Timeline: _fixScroll: Window#scroll"),
+      { once: true },
     );
     scrollBy(delta, 0);
   }
@@ -215,7 +222,21 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
         preventScroll: true,
       });
 
-      scroll(`path=${pathNew}`, item, "center", true);
+      const doScroll = () =>
+        void scroll(`path=${pathNew}`, item, "center", true);
+
+      if (shouldFix) {
+        // Firefox: scrollIntoView in smooth mode misbehaves if called too soon after scrollBy
+        // requestAnimationFrame(doScroll);                         // always too early
+        // setTimeout(doScroll, 0);                                 // sometimes too early
+        // addEventListener("scroll", doScroll, { once: true });    // sometimes too early
+        // “i hate this” — aria
+        addEventListener("scroll", () => void setTimeout(doScroll, 0), {
+          once: true,
+        });
+      } else {
+        doScroll();
+      }
     }
   }
 
