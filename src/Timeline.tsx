@@ -23,8 +23,6 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
 }
 
 class Timeline0 extends Component<TimelineProps, TimelineState> {
-  _reverse: Map<string, [number, number]>;
-  _flat: ItemMeta[];
   _deferScroll: boolean;
   _self: RefObject<HTMLDivElement>;
   _clusters: RefObject<HTMLDivElement>[];
@@ -32,30 +30,52 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
 
   constructor(props: TimelineProps) {
     super(props);
-    this.state = {
-      focused: null,
-    };
 
     this._focus = this._focus.bind(this);
     this._wheel = this._wheel.bind(this);
 
-    this._reverse = new Map();
+    const reverse = new Map();
     props.clusters.forEach((cluster, i) => {
       cluster.items.forEach((item, j) => {
-        this._reverse.set(item.path, [i, j]);
+        reverse.set(item.path, [i, j]);
       });
     });
 
-    this._flat = props.clusters
+    const flat = props.clusters
       .flatMap((cluster) => cluster.items)
       .sort((p, q) => p.index - q.index);
+
+    this.state = {
+      reverse,
+      flat,
+      focused: null,
+      pathOld: null,
+    };
 
     this._deferScroll = false;
     this._self = createRef();
     this._clusters = props.clusters.map(() => createRef());
     this._items = new Map(
-      [...this._reverse.keys()].map((path) => [path, createRef()]),
+      [...reverse.keys()].map((path) => [path, createRef()]),
     );
+  }
+
+  /**
+   * When the user selects a different Item (i.e. when props.path changes), update state.focused at
+   * the same time, rather than waiting until after we focus the Item in #componentDidUpdate then
+   * scheduling a cascading update (setState) in the focus listener.
+   */
+  static getDerivedStateFromProps(
+    { path: pathNew }: TimelineProps,
+    { pathOld, reverse }: TimelineState,
+  ): Partial<TimelineState> {
+    const result: Partial<TimelineState> = { pathOld: pathNew };
+
+    if (pathNew != pathOld) {
+      result.focused = Timeline0._getSelectedCluster(pathNew, reverse);
+    }
+
+    return result;
   }
 
   render() {
@@ -144,9 +164,15 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
     path: string,
     event: FocusEvent<HTMLAnchorElement>,
   ) {
-    console.log(`Timeline: _focus: focus on Item path=${path}`);
+    console.log(
+      `Timeline: _focus: focus on Item path=${path} focused=${this.state.focused} clusterIndex=${clusterIndex}`,
+    );
     scroll(`path=${path}`, event.target, "nearest", false);
-    this.setState({ focused: clusterIndex });
+
+    // try to avoid a cascading update (see #getDerivedStateFromProps)
+    if (clusterIndex != this.state.focused) {
+      this.setState({ focused: clusterIndex });
+    }
   }
 
   _fixScroll({ clusterLeft, oldSize }: Required<TimelineSnapshot>) {
@@ -186,10 +212,11 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
       if (this._deferScroll) {
         scroll(`path=${pathNew}`, item, "center", false);
         this._deferScroll = false;
+        performance.measure("Timeline#_deferScroll", "Timeline#_deferScroll");
       }
 
       if (pathNew != pathOld) {
-        item?.focus({
+        item.focus({
           // this option shouldn’t be load-bearing (just for efficiency)
           preventScroll: true,
         });
@@ -201,6 +228,7 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
         ) {
           scroll(`path=${pathNew}`, item, "center", false);
         } else {
+          performance.mark("Timeline#_deferScroll");
           this._deferScroll = true;
         }
       }
@@ -229,11 +257,18 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
   }
 
   _getSelectedCluster(path: string | null): number | null {
-    if (path == null || !this._reverse.has(path)) {
+    return Timeline0._getSelectedCluster(path, this.state.reverse);
+  }
+
+  static _getSelectedCluster(
+    path: string | null,
+    reverse: TimelineState["reverse"],
+  ): number | null {
+    if (path == null || !reverse.has(path)) {
       return null;
     }
 
-    return this._reverse.get(path)![0];
+    return reverse.get(path)![0];
   }
 
   _clusterIsExpanded(
@@ -258,11 +293,11 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
     clusterIndex: number,
     whichPath: TimelineProps["path"],
   ): boolean {
-    if (whichPath == null || !this._reverse.has(whichPath)) {
+    if (whichPath == null || !this.state.reverse.has(whichPath)) {
       return false;
     }
 
-    return clusterIndex == this._reverse.get(whichPath)![0];
+    return clusterIndex == this.state.reverse.get(whichPath)![0];
   }
 
   _itemIsSelected(clusterIndex: number, itemIndex: number): boolean {
@@ -270,21 +305,21 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
       return false;
     }
 
-    return itemIndex == this._reverse.get(this.props.path!)![1];
+    return itemIndex == this.state.reverse.get(this.props.path!)![1];
   }
 
   _navigate(delta: number) {
     const { clusters, path, push } = this.props;
 
-    if (path == null || !this._reverse.has(path)) {
+    if (path == null || !this.state.reverse.has(path)) {
       return;
     }
 
-    const [i, j] = this._reverse.get(path)!;
+    const [i, j] = this.state.reverse.get(path)!;
     const index = clusters[i].items[j].index + delta;
 
-    if (index in this._flat) {
-      push(this._flat[index].path);
+    if (index in this.state.flat) {
+      push(this.state.flat[index].path);
     }
   }
 
@@ -304,7 +339,10 @@ interface TimelineProps {
 }
 
 interface TimelineState {
+  reverse: Map<string, [number, number]>;
+  flat: ItemMeta[];
   focused: number | null;
+  pathOld: string | null;
 }
 
 interface TimelineSnapshot {
