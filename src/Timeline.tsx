@@ -23,7 +23,6 @@ export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
 }
 
 class Timeline0 extends Component<TimelineProps, TimelineState> {
-  _deferScroll: boolean;
   _self: RefObject<HTMLDivElement>;
   _clusters: RefObject<HTMLDivElement>[];
   _items: Map<string, RefObject<HTMLAnchorElement>>;
@@ -52,7 +51,6 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
       pathOld: null,
     };
 
-    this._deferScroll = false;
     this._self = createRef();
     this._clusters = props.clusters.map(() => createRef());
     this._items = new Map(
@@ -64,6 +62,9 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
    * When the user selects a different Item (i.e. when props.path changes), update state.focused at
    * the same time, rather than waiting until after we focus the Item in #componentDidUpdate then
    * scheduling a cascading update (setState) in the focus listener.
+   *
+   * This is both a performance optimisation and a way to guarantee that the previously-selected
+   * Cluster collapses (and hence our scroll compensation happens) before any scrollIntoView calls.
    */
   static getDerivedStateFromProps(
     { path: pathNew }: TimelineProps,
@@ -202,36 +203,19 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
 
     const { path: pathNew } = this.props;
 
-    if (pathNew != null) {
+    if (pathNew != null && pathNew != pathOld) {
       const item = this._items.get(pathNew)?.current;
 
       if (item == null) {
         return;
       }
 
-      if (this._deferScroll) {
-        scroll(`path=${pathNew}`, item, "center", false);
-        this._deferScroll = false;
-        performance.measure("Timeline#_deferScroll", "Timeline#_deferScroll");
-      }
+      item.focus({
+        // this option shouldn’t be load-bearing (just for efficiency)
+        preventScroll: true,
+      });
 
-      if (pathNew != pathOld) {
-        item.focus({
-          // this option shouldn’t be load-bearing (just for efficiency)
-          preventScroll: true,
-        });
-
-        if (
-          this._getSelectedCluster(pathNew) ==
-            this._getSelectedCluster(pathOld) ||
-          shouldFix
-        ) {
-          scroll(`path=${pathNew}`, item, "center", false);
-        } else {
-          performance.mark("Timeline#_deferScroll");
-          this._deferScroll = true;
-        }
-      }
+      scroll(`path=${pathNew}`, item, "center", true);
     }
   }
 
