@@ -14,6 +14,7 @@ import classNames from "classnames";
 
 import { usePath } from "./path";
 import { ClusterMeta, ItemMeta } from "./data";
+import { SMALL } from "./config";
 
 export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
   const { path, push } = usePath();
@@ -402,7 +403,7 @@ const Item = memo(
         onFocus={(event) => void onFocus(onFocusArg, path, event)}
       >
         <svg viewBox={`0 0 ${x} ${y}`} preserveAspectRatio="xMaxYMid slice">
-          <image width={x} height={y} href={`i/${path}.png`} />
+          <image width={x} height={y} href={SMALL(path)} />
         </svg>
       </a>
     );

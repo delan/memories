@@ -1,7 +1,6 @@
 export interface ItemMeta {
   index: number;
   birth: number;
-  category: string;
   path: string;
   w: number;
   h: number;
@@ -22,16 +21,13 @@ export async function fetchItemMetas(): Promise<ItemMeta[]> {
     .split("\n")
     .map((x) => x.split(" "));
   return records
-    .filter((x) => x.length == 7)
-    .filter(([, , , , , , category]) => category)
-    .map(([birth, path, w, h, x, y, category]) => ({
+    .map(([birth, path, w, h, x, y]) => ({
       birth: Number(birth) * 1000,
       path,
       w: Number(w),
       h: Number(h),
       x: Number(x),
       y: Number(y),
-      category,
     }))
     .sort((p, q) => p.birth - q.birth)
     .map(({ ...rest }, index) => ({ index, ...rest }));
