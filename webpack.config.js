@@ -15,7 +15,6 @@ const config = {
   devServer: {
     contentBase: "./dist",
     historyApiFallback: { disableDotRule: true },
-    host: "172.19.128.39",
   },
   resolve: {
     extensions: [".js", ".ts", ".jsx", ".tsx"],
@@ -86,11 +85,6 @@ const config = {
     ],
   },
   plugins: [
-    new HtmlPlugin({
-      filename: "old.html",
-      template: "src/old.html",
-      chunks: [],
-    }),
     new HtmlPlugin({
       filename: "index.html",
       template: "src/new.html",
