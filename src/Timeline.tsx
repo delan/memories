@@ -16,10 +16,21 @@ import { usePath } from "./path";
 import { ClusterMeta, ItemMeta } from "./data";
 import { SMALL } from "./config";
 
-export function Timeline({ clusters }: { clusters: ClusterMeta[] }) {
+export function Timeline({
+  clusters,
+  setPinchEnabled,
+}: {
+  clusters: ClusterMeta[];
+  setPinchEnabled: (_: boolean) => void;
+}) {
   const { path, push } = usePath();
   return (
-    <Timeline0 clusters={clusters} path={path} push={useCallback(push, [])} />
+    <Timeline0
+      clusters={clusters}
+      setPinchEnabled={setPinchEnabled}
+      path={path}
+      push={useCallback(push, [])}
+    />
   );
 }
 
@@ -68,13 +79,14 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
    * Cluster collapses (and hence our scroll compensation happens) before any scrollIntoView calls.
    */
   static getDerivedStateFromProps(
-    { path: pathNew }: TimelineProps,
+    { path: pathNew, setPinchEnabled }: TimelineProps,
     { pathOld, reverse }: TimelineState,
   ): Partial<TimelineState> {
     const result: Partial<TimelineState> = { pathOld: pathNew };
 
     if (pathNew != pathOld) {
       result.focused = Timeline0._getSelectedCluster(pathNew, reverse);
+      setPinchEnabled(false);
     }
 
     return result;
@@ -346,6 +358,7 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
 
 interface TimelineProps {
   clusters: ClusterMeta[];
+  setPinchEnabled: (_: boolean) => void;
   path: string | null;
   push: (_: string) => void;
 }
