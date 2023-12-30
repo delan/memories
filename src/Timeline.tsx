@@ -402,9 +402,7 @@ const Item = memo(
         onClick={click}
         onFocus={(event) => void onFocus(onFocusArg, path, event)}
       >
-        <svg viewBox={`0 0 ${x} ${y}`} preserveAspectRatio="xMaxYMid slice">
-          <image width={x} height={y} href={SMALL(path)} />
-        </svg>
+        <img src={SMALL(path)} />
       </a>
     );
 
