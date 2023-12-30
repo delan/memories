@@ -334,7 +334,13 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
       return;
     }
 
-    this._navigate(Math.sign(event.deltaY));
+    if (this._self.current) {
+      scrollBy(event.deltaY, 0);
+    }
+
+    // FIXME this is very broken, often jumping forward or refusing to navigate
+    // to items to the left of the current one
+    // this._navigate(Math.sign(event.deltaY));
   }
 }
 
