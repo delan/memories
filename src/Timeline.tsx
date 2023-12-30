@@ -397,12 +397,12 @@ const Item = memo(
       <a
         ref={ref}
         className={classNames("Item", { selected })}
-        style={{ "--index": indexInCluster }}
+        style={{ "--index": indexInCluster, "--width": x, "--height": y }}
         href={path}
         onClick={click}
         onFocus={(event) => void onFocus(onFocusArg, path, event)}
       >
-        <img src={SMALL(path)} />
+        <img loading="lazy" src={SMALL(path)} />
       </a>
     );
 
