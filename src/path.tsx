@@ -30,8 +30,8 @@ export function usePath() {
 }
 
 function getPath() {
-  if (location.href.startsWith(document.baseURI)) {
-    const base = new URL(document.baseURI);
+  const base = new URL(".", location.href);
+  if (location.href.startsWith(base.href)) {
     return location.pathname.slice(base.pathname.length);
   }
 
