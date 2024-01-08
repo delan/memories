@@ -4,8 +4,6 @@ export interface ItemMeta {
   path: string;
   w: number;
   h: number;
-  x: number;
-  y: number;
 }
 
 export interface ClusterMeta {
@@ -21,13 +19,11 @@ export async function fetchItemMetas(): Promise<ItemMeta[]> {
     .split("\n")
     .map((x) => x.split(" "));
   return records
-    .map(([birth, path, w, h, x, y]) => ({
+    .map(([birth, path, w, h]) => ({
       birth: Number(birth) * 1000,
       path,
       w: Number(w),
       h: Number(h),
-      x: Number(x),
-      y: Number(y),
     }))
     .sort((p, q) => p.birth - q.birth)
     .map(({ ...rest }, index) => ({ index, ...rest }));
