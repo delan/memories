@@ -30,9 +30,7 @@ export function Display({
   if (path) {
     if (VIDEO.test(path)) {
       return (
-        <div
-          className="Display"
-        >
+        <div className="Display">
           <video src={BIG(path)} controls autoPlay />
         </div>
       );
