@@ -409,7 +409,7 @@ const Item = memo(
       onFocusArg: number;
     } & ItemMeta
   >(function Item0(
-    { indexInCluster, selected, push, onFocus, onFocusArg, path, w, h },
+    { indexInCluster, selected, push, onFocus, onFocusArg, path, width, height },
     ref,
   ) {
     const video = VIDEO.test(path);
@@ -417,7 +417,7 @@ const Item = memo(
       <a
         ref={ref}
         className={classNames("Item", { selected, video })}
-        style={{ "--index": indexInCluster, "--width": w, "--height": h }}
+        style={{ "--index": indexInCluster, "--width": width, "--height": height }}
         href={path}
         onClick={click}
         onFocus={(event) => void onFocus(onFocusArg, path, event)}
