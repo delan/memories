@@ -14,7 +14,7 @@ import classNames from "classnames";
 
 import { usePath } from "./path";
 import { ClusterMeta, ItemMeta } from "./data";
-import { SMALL } from "./config";
+import { SMALL, VIDEO } from "./config";
 
 export function Timeline({
   clusters,
@@ -412,10 +412,11 @@ const Item = memo(
     { indexInCluster, selected, push, onFocus, onFocusArg, path, x, y },
     ref,
   ) {
+    const video = VIDEO.test(path);
     return (
       <a
         ref={ref}
-        className={classNames("Item", { selected })}
+        className={classNames("Item", { selected, video })}
         style={{ "--index": indexInCluster, "--width": x, "--height": y }}
         href={path}
         onClick={click}

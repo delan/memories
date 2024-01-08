@@ -71,6 +71,7 @@
         transition-duration: 0.25s
         transition-property: filter
         overflow: hidden
+        position: relative
 
         &:focus
           outline: 3px solid fuchsia
@@ -78,6 +79,18 @@
 
         &.selected, &:hover
           filter: brightness(1)
+
+        &.video:after
+          content: "▶"
+          display: flex
+          align-items: center
+          justify-content: center
+          position: absolute
+          inset: 0
+          font-size: 8vh
+          color: #ffffff80
+          -webkit-text-stroke-width: 1vh
+          -webkit-text-stroke-color: fuchsia
 
         > *
           width: 100%
