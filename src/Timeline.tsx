@@ -2,13 +2,12 @@ import React, {
   MouseEvent,
   WheelEvent,
   ReactFragment,
-  Component,
-  RefObject,
   forwardRef,
   memo,
-  useCallback,
-  createRef,
   FocusEvent,
+  useState,
+  useRef,
+  useEffect,
 } from "react";
 import classNames from "classnames";
 
@@ -18,259 +17,118 @@ import { SMALL, VIDEO } from "./config";
 
 export function Timeline({
   clusters,
+  reverse,
+  flat,
   setPinchEnabled,
 }: {
   clusters: ClusterMeta[];
+  reverse: Map<string, [number, number]>;
+  flat: ItemMeta[];
   setPinchEnabled: (_: boolean) => void;
 }) {
   const { path, push } = usePath();
-  return (
-    <Timeline0
-      clusters={clusters}
-      setPinchEnabled={setPinchEnabled}
-      path={path}
-      push={useCallback(push, [])}
-    />
-  );
-}
+  const [focused, setFocused] = useState<number | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  void flat; // TODO wheel to step through items?
 
-class Timeline0 extends Component<TimelineProps, TimelineState> {
-  _self: RefObject<HTMLDivElement>;
-  _clusters: RefObject<HTMLDivElement>[];
-  _items: Map<string, RefObject<HTMLAnchorElement>>;
-
-  constructor(props: TimelineProps) {
-    super(props);
-
-    this._focus = this._focus.bind(this);
-    this._wheel = this._wheel.bind(this);
-    this._click = this._click.bind(this);
-
-    const reverse = new Map();
-    props.clusters.forEach((cluster, i) => {
-      cluster.items.forEach((item, j) => {
-        reverse.set(item.path, [i, j]);
-      });
-    });
-
-    const flat = props.clusters
-      .flatMap((cluster) => cluster.items)
-      .sort((p, q) => p.index - q.index);
-
-    this.state = {
-      reverse,
-      flat,
-      focused: null,
-      pathOld: null,
-    };
-
-    this._self = createRef();
-    this._clusters = props.clusters.map(() => createRef());
-    this._items = new Map(
-      [...reverse.keys()].map((path) => [path, createRef()]),
-    );
-  }
-
-  /**
-   * When the user selects a different Item (i.e. when props.path changes), update state.focused at
-   * the same time, rather than waiting until after we focus the Item in #componentDidUpdate then
-   * scheduling a cascading update (setState) in the focus listener.
-   *
-   * This is both a performance optimisation and a way to guarantee that the previously-selected
-   * Cluster collapses (and hence our scroll compensation happens) before any scrollIntoView calls.
-   */
-  static getDerivedStateFromProps(
-    { path: pathNew, setPinchEnabled }: TimelineProps,
-    { pathOld, reverse }: TimelineState,
-  ): Partial<TimelineState> {
-    const result: Partial<TimelineState> = { pathOld: pathNew };
-
-    if (pathNew != pathOld) {
-      result.focused = Timeline0._getSelectedCluster(pathNew, reverse);
+  useEffect(() => {
+    if (path == null) return;
+    const [i, j] = reverse.get(path)!;
+    const item = ref.current!.childNodes[i].childNodes[j];
+    if (item != null && item instanceof HTMLElement) {
       setPinchEnabled(false);
+      item.focus({
+        // this option shouldn’t be load-bearing (just for efficiency)
+        preventScroll: true,
+      });
+      scroll(`path=${path}`, item, "center", true);
     }
+  }, [path]);
 
-    return result;
-  }
+  return (
+    <div ref={ref} onWheel={wheel} onClick={click} className="Timeline">
+      {clusters.map((cluster, i) => {
+        return (
+          <Cluster
+            key={i}
+            length={cluster.items.length}
+            expanded={clusterIsExpanded(i, path, focused)}
+          >
+            {cluster.items.map((item, j) => (
+              <Item
+                key={item.path}
+                indexInCluster={j}
+                selected={itemIsSelected(i, j)}
+                push={push}
+                onFocus={focus}
+                onFocusArg={i}
+                {...item}
+              />
+            ))}
+          </Cluster>
+        );
+      })}
+    </div>
+  );
 
-  render() {
-    const { clusters, path, push } = this.props;
-    const { focused } = this.state;
-
-    while (this._clusters.length < clusters.length) {
-      this._clusters.push(createRef());
-    }
-
-    return (
-      <div
-        ref={this._self}
-        onWheel={this._wheel}
-        onClick={this._click}
-        className="Timeline"
-      >
-        {clusters.map((cluster, i) => {
-          return (
-            <Cluster
-              key={i}
-              ref={this._clusters[i]}
-              length={cluster.items.length}
-              expanded={this._clusterIsExpanded(i, path, focused)}
-            >
-              {cluster.items.map((item, j) => (
-                <Item
-                  key={item.path}
-                  ref={this._items.get(item.path)}
-                  indexInCluster={j}
-                  selected={this._itemIsSelected(i, j)}
-                  push={push}
-                  onFocus={this._focus}
-                  onFocusArg={i}
-                  {...item}
-                />
-              ))}
-            </Cluster>
-          );
-        })}
-      </div>
-    );
-  }
-
-  _focus(
+  function focus(
     clusterIndex: number,
     path: string,
     event: FocusEvent<HTMLAnchorElement>,
   ) {
     console.log(
-      `Timeline: _focus: focus on Item path=${path} focused=${this.state.focused} clusterIndex=${clusterIndex}`,
+      `Timeline: focus: focus on Item path=${path} focused=${focused} clusterIndex=${clusterIndex}`,
     );
 
     scroll(`path=${path}`, event.target, "nearest", false);
-
-    // try to avoid a cascading update (see #getDerivedStateFromProps)
-    if (clusterIndex != this.state.focused) {
-      this.setState({ focused: clusterIndex });
-    }
+    setFocused(clusterIndex);
   }
 
-  componentDidUpdate({ path: pathOld }: TimelineProps, _: TimelineState) {
-    const { path: pathNew } = this.props;
-
-    if (pathNew != null && pathNew != pathOld) {
-      const item = this._items.get(pathNew)?.current;
-
-      if (item == null) {
-        return;
-      }
-
-      item.focus({
-        // this option shouldn’t be load-bearing (just for efficiency)
-        preventScroll: true,
-      });
-
-      scroll(`path=${pathNew}`, item, "center", true);
-    }
-  }
-
-  componentDidMount() {
-    const { path } = this.props;
-
-    if (path != null) {
-      const item = this._items.get(path)?.current;
-
-      if (item != null) {
-        item.focus({
-          // this option shouldn’t be load-bearing (just for efficiency)
-          preventScroll: true,
-        });
-
-        scroll(`path=${path}`, item, "center", false);
-      }
-    }
-  }
-
-  _measure(clusterIndex: number): number | undefined {
-    return this._clusters[clusterIndex].current?.getBoundingClientRect().width;
-  }
-
-  _getSelectedCluster(path: string | null): number | null {
-    return Timeline0._getSelectedCluster(path, this.state.reverse);
-  }
-
-  static _getSelectedCluster(
-    path: string | null,
-    reverse: TimelineState["reverse"],
-  ): number | null {
-    if (path == null || !reverse.has(path)) {
-      return null;
-    }
-
-    return reverse.get(path)![0];
-  }
-
-  _clusterIsExpanded(
+  function clusterIsExpanded(
     clusterIndex: number,
-    whichPath: TimelineProps["path"],
-    whichFocused: TimelineState["focused"],
+    whichPath: string | null,
+    whichFocused: number | null,
   ): boolean {
     return (
-      this._clusterIsSelected(clusterIndex, whichPath) ||
-      this._clusterIsFocused(clusterIndex, whichFocused)
+      clusterIsSelected(clusterIndex, whichPath) ||
+      clusterIsFocused(clusterIndex, whichFocused)
     );
   }
 
-  _clusterIsFocused(
+  function clusterIsFocused(
     clusterIndex: number,
-    whichFocused: TimelineState["focused"],
+    whichFocused: number | null,
   ): boolean {
     return clusterIndex == whichFocused;
   }
 
-  _clusterIsSelected(
+  function clusterIsSelected(
     clusterIndex: number,
-    whichPath: TimelineProps["path"],
+    whichPath: string | null,
   ): boolean {
-    if (whichPath == null || !this.state.reverse.has(whichPath)) {
+    if (whichPath == null || !reverse.has(whichPath)) {
       return false;
     }
 
-    return clusterIndex == this.state.reverse.get(whichPath)![0];
+    return clusterIndex == reverse.get(whichPath)![0];
   }
 
-  _itemIsSelected(clusterIndex: number, itemIndex: number): boolean {
-    if (!this._clusterIsSelected(clusterIndex, this.props.path)) {
+  function itemIsSelected(clusterIndex: number, itemIndex: number): boolean {
+    if (!clusterIsSelected(clusterIndex, path)) {
       return false;
     }
 
-    return itemIndex == this.state.reverse.get(this.props.path!)![1];
+    return itemIndex == reverse.get(path!)![1];
   }
 
-  _navigate(delta: number) {
-    const { clusters, path, push } = this.props;
-
-    if (path == null || !this.state.reverse.has(path)) {
-      return;
-    }
-
-    const [i, j] = this.state.reverse.get(path)!;
-    const index = clusters[i].items[j].index + delta;
-
-    if (index in this.state.flat) {
-      push(this.state.flat[index].path);
-    }
-  }
-
-  _wheel(event: WheelEvent<HTMLElement>) {
+  function wheel(event: WheelEvent<HTMLElement>) {
     if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
       return;
     }
 
-    if (this._self.current) {
+    if (ref.current != null) {
       scrollBy(event.deltaY, 0);
     }
-
-    // FIXME this is very broken, often jumping forward or refusing to navigate
-    // to items to the left of the current one
-    // this._navigate(Math.sign(event.deltaY));
   }
 
   /**
@@ -281,30 +139,16 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
    * fired on the containing cluster or Timeline, but the correct item still gets focused, so we can
    * catch that and treat the focused item as clicked.
    */
-  _click() {
+  function click() {
     const item = document.activeElement;
-    console.log("Timeline: _click!", item);
+    console.log("Timeline: click!", item);
     if (
       item != null &&
       item instanceof HTMLElement &&
       item.dataset.path != null
     )
-      this.props.push(item.dataset.path);
+      push(item.dataset.path);
   }
-}
-
-interface TimelineProps {
-  clusters: ClusterMeta[];
-  setPinchEnabled: (_: boolean) => void;
-  path: string | null;
-  push: (_: string) => void;
-}
-
-interface TimelineState {
-  reverse: Map<string, [number, number]>;
-  flat: ItemMeta[];
-  focused: number | null;
-  pathOld: string | null;
 }
 
 const Cluster = forwardRef<
