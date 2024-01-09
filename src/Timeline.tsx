@@ -44,6 +44,7 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
 
     this._focus = this._focus.bind(this);
     this._wheel = this._wheel.bind(this);
+    this._click = this._click.bind(this);
 
     const reverse = new Map();
     props.clusters.forEach((cluster, i) => {
@@ -100,12 +101,13 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
       this._clusters.push(createRef());
     }
 
-    while (this._clusters.length < clusters.length) {
-      this._clusters.push(createRef());
-    }
-
     return (
-      <div ref={this._self} onWheel={this._wheel} className="Timeline">
+      <div
+        ref={this._self}
+        onWheel={this._wheel}
+        onClick={this._click}
+        className="Timeline"
+      >
         {clusters.map((cluster, i) => {
           return (
             <Cluster
@@ -133,46 +135,6 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
     );
   }
 
-  // prettier-ignore
-  getSnapshotBeforeUpdate({ path: pathOld }: TimelineProps, { focused: focusedOld }: TimelineState): TimelineSnapshot | null {
-    const { path: pathNew } = this.props;
-    const { focused: focusedNew } = this.state;
-    console.log(`Timeline: gSBU: focusedNew=${focusedNew} focusedOld=${focusedOld}`);
-    const selectedNew = this._getSelectedCluster(pathNew);
-    const selectedOld = this._getSelectedCluster(pathOld);
-    const selectedChanged = selectedNew != selectedOld;
-    const focusedChanged = focusedNew != focusedOld;
-    const clusterNew = selectedChanged ? selectedNew : focusedChanged ? focusedNew : null;
-    const clusterOld = selectedChanged ? selectedOld : focusedChanged ? focusedOld : null;
-    const potentiallyFixable = clusterNew != null && clusterOld != null;
-
-    if (potentiallyFixable) {
-      const clusterNewIsOnLeft = clusterNew! < clusterOld!;
-      const clusterNewIsOnRight = clusterNew! > clusterOld!;
-
-      const clusterLeft = Math.min(clusterNew!, clusterOld!);
-      const clusterLeftIsExpanded = this._clusterIsExpanded(clusterLeft, pathNew, focusedNew);
-      const clusterLeftWasExpanded = this._clusterIsExpanded(clusterLeft, pathOld, focusedOld);
-      const clusterLeftChanged = clusterLeftIsExpanded != clusterLeftWasExpanded;
-
-      console.log([
-        `Timeline: gSBU:`,
-        `${selectedChanged ? "selected" : focusedChanged ? "focused" : "unknown"}`,
-        `clusterNew=${clusterNew} clusterOld=${clusterOld}`,
-        `${clusterNewIsOnLeft ? "left" : clusterNewIsOnRight ? "right" : "unknown"}`,
-        `clusterLeft=${clusterLeft} clusterLeftChanged=${clusterLeftChanged}`,
-        `(${clusterLeftWasExpanded} to ${clusterLeftIsExpanded})`,
-      ].join(" "));
-
-      if (clusterLeftChanged) {
-        const oldSize = this._measure(clusterLeft);
-        return { clusterLeft, oldSize };
-      }
-    }
-
-    return null;
-  }
-
   _focus(
     clusterIndex: number,
     path: string,
@@ -190,37 +152,7 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
     }
   }
 
-  _fixScroll({ clusterLeft, oldSize }: Required<TimelineSnapshot>) {
-    const newSize = this._measure(clusterLeft);
-
-    if (newSize == null) {
-      return;
-    }
-
-    const delta = newSize - oldSize;
-    console.log(
-      `Timeline: cDU: _fixScroll: was ${oldSize} now ${newSize} delta ${delta}`,
-    );
-
-    addEventListener(
-      "scroll",
-      () => void console.log("Timeline: _fixScroll: Window#scroll"),
-      { once: true },
-    );
-    scrollBy(delta, 0);
-  }
-
-  componentDidUpdate(
-    { path: pathOld }: TimelineProps,
-    _: TimelineState,
-    snapshot: TimelineSnapshot | null,
-  ) {
-    const shouldFix = snapshot?.oldSize != null;
-
-    if (shouldFix) {
-      this._fixScroll(snapshot as Required<TimelineSnapshot>); // FIXME
-    }
-
+  componentDidUpdate({ path: pathOld }: TimelineProps, _: TimelineState) {
     const { path: pathNew } = this.props;
 
     if (pathNew != null && pathNew != pathOld) {
@@ -235,21 +167,7 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
         preventScroll: true,
       });
 
-      const doScroll = () =>
-        void scroll(`path=${pathNew}`, item, "center", true);
-
-      if (shouldFix) {
-        // Firefox: scrollIntoView in smooth mode misbehaves if called too soon after scrollBy
-        // requestAnimationFrame(doScroll);                         // always too early
-        // setTimeout(doScroll, 0);                                 // sometimes too early
-        // addEventListener("scroll", doScroll, { once: true });    // sometimes too early
-        // “i hate this” — aria
-        addEventListener("scroll", () => void setTimeout(doScroll, 0), {
-          once: true,
-        });
-      } else {
-        doScroll();
-      }
+      scroll(`path=${pathNew}`, item, "center", true);
     }
   }
 
@@ -354,6 +272,25 @@ class Timeline0 extends Component<TimelineProps, TimelineState> {
     // to items to the left of the current one
     // this._navigate(Math.sign(event.deltaY));
   }
+
+  /**
+   * Fallback click handler.
+   *
+   * When you click on an item in another cluster, the collapsing and expanding of clusters can move
+   * the item far enough away that the item no longer counts as clicked. In this case, the click is
+   * fired on the containing cluster or Timeline, but the correct item still gets focused, so we can
+   * catch that and treat the focused item as clicked.
+   */
+  _click() {
+    const item = document.activeElement;
+    console.log("Timeline: _click!", item);
+    if (
+      item != null &&
+      item instanceof HTMLElement &&
+      item.dataset.path != null
+    )
+      this.props.push(item.dataset.path);
+  }
 }
 
 interface TimelineProps {
@@ -368,11 +305,6 @@ interface TimelineState {
   flat: ItemMeta[];
   focused: number | null;
   pathOld: string | null;
-}
-
-interface TimelineSnapshot {
-  clusterLeft: number;
-  oldSize?: number;
 }
 
 const Cluster = forwardRef<
@@ -432,6 +364,7 @@ const Item = memo(
           "--height": height,
         }}
         href={path}
+        data-path={path}
         onClick={click}
         onFocus={(event) => void onFocus(onFocusArg, path, event)}
       >
@@ -440,7 +373,12 @@ const Item = memo(
     );
 
     function click(event: MouseEvent<HTMLElement>) {
+      // Don’t navigate due to clicking on a link.
       event.preventDefault();
+
+      // Don’t run the Timeline’s fallback click handler.
+      event.stopPropagation();
+
       push(path);
     }
   }),
