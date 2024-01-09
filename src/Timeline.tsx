@@ -33,7 +33,12 @@ export function Timeline({
 
   useEffect(() => {
     if (path == null) return;
-    const [i, j] = reverse.get(path)!;
+    const indices = reverse.get(path);
+    if (indices == null) {
+      console.warn(`Timeline: path lookup failed: ${path}`);
+      return;
+    }
+    const [i, j] = indices;
     const item = ref.current!.childNodes[i].childNodes[j];
     if (item != null && item instanceof HTMLElement) {
       setPinchEnabled(false);
