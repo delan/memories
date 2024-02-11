@@ -85,7 +85,7 @@ export function Sidebar({ itemsByPath, tagFilters }: {
       <summary></summary>
       {/* <h2>search</h2> */}
       <ul onClick={click}>
-        {[...tagFilters].map(tagFilter => <li>
+        {[...tagFilters].map((tagFilter, i) => <li key={i}>
           [<TagLink search={query(search, [tagFilter])}>×</TagLink>]
           {" "}
           <TagLink search={query("", [], tagFilter)}>
@@ -96,7 +96,7 @@ export function Sidebar({ itemsByPath, tagFilters }: {
       </ul>
       {/* <h2>tags</h2> */}
       <ul onClick={click}>
-        {currentTags().map(tag => <li>
+        {currentTags().map((tag, i) => <li key={i}>
           [<TagLink search={query(search, [], tag)}>+</TagLink>]
           [<TagLink search={query(search, [], `-${tag}`)}>−</TagLink>]
           {" "}
