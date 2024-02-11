@@ -47,18 +47,30 @@ function getSearch() {
   return location.search;
 }
 
-export function computeTagFilters(search: string) {
+export function parseSearch(search: string) {
+  const result = new URLSearchParams(search);
+  return new Set(result.keys());
+}
+
+export function parseTagFilters(tagFilters: Set<string>) {
   const result = {
     required: new Set<string>(),
     excluded: new Set<string>(),
   };
-  const params = new URLSearchParams(search);
-  for (const key of params.keys()) {
-    if (key.startsWith("-")) {
-      result.excluded.add(key.slice(1));
+  for (const tagFilter of tagFilters) {
+    if (tagFilterIsNegative(tagFilter)) {
+      result.excluded.add(tagFilterName(tagFilter));
     } else {
-      result.required.add(key);
+      result.required.add(tagFilterName(tagFilter));
     }
   }
   return result;
+}
+
+export function tagFilterIsNegative(signedTag: string) {
+  return signedTag.startsWith("-");
+}
+
+export function tagFilterName(signedTag: string) {
+  return signedTag.startsWith("-") ? signedTag.slice(1) : signedTag;
 }

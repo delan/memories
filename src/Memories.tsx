@@ -3,23 +3,38 @@ import "pinch-zoom-element";
 import React, { useEffect, useState } from "react";
 
 import { Timeline } from "./Timeline";
-import { computeTagFilters, usePath } from "./path";
+import { parseSearch, parseTagFilters, tagFilterIsNegative, tagFilterName, usePath } from "./path";
 import { ClusterMeta, ItemMeta, findClusterMetas } from "./data";
 import { BIG, VIDEO } from "./config";
 
 export function Memories({ items }: { items: ItemMeta[] }) {
   const { search } = usePath();
+  const [tagFilters, setTagFilters] = useState<Set<string>>(new Set);
+
+  // all items (items), and their derived state
+  const [itemsByPath, setItemsByPath] = useState<Map<string, ItemMeta>>(new Map);
+
+  // search results, and their derived state
   const [clusters, setClusters] = useState<ClusterMeta[] | null>(null);
   const [reverse, setReverse] = useState<Map<string, [number, number]> | null>(
     null,
   );
   const [flat, setFlat] = useState<ItemMeta[] | null>(null);
+
   const [pinchEnabled, setPinchEnabled] = useState(false);
 
   useEffect(() => {
-    const { required, excluded } = computeTagFilters(search);
+    const itemsByPath = new Map;
+    items.forEach(item => itemsByPath.set(item.path, item));
+    setItemsByPath(itemsByPath);
+  }, [items]);
+
+  useEffect(() => {
+    const tagFilters = parseSearch(search);
+    const { required, excluded } = parseTagFilters(tagFilters);
+    setTagFilters(tagFilters);
     setClusters(findClusterMetas(items, required, excluded));
-  }, [search]);
+  }, [items, search]);
 
   useEffect(() => {
     if (clusters == null) return;
@@ -39,10 +54,14 @@ export function Memories({ items }: { items: ItemMeta[] }) {
     setFlat(flat);
   }, [clusters]);
 
-  if (clusters == null || reverse == null || flat == null) return null;
+  if (itemsByPath == null) return null;
+  if (clusters == null) return null;
+  if (reverse == null) return null;
+  if (flat == null) return null;
 
   return (
     <>
+      <Sidebar itemsByPath={itemsByPath} tagFilters={tagFilters} />
       <Display pinchEnabled={pinchEnabled} setPinchEnabled={setPinchEnabled} />
       <Timeline
         clusters={clusters}
@@ -52,6 +71,60 @@ export function Memories({ items }: { items: ItemMeta[] }) {
       />
     </>
   );
+}
+
+export function Sidebar({ itemsByPath, tagFilters }: {
+  itemsByPath: Map<string, ItemMeta>;
+  tagFilters: Set<string>;
+}) {
+  const { path, search } = usePath();
+
+  return <>
+    <details className="Sidebar">
+      <summary></summary>
+      {/* <h2>search</h2> */}
+      <ul>
+        {[...tagFilters].map(tagFilter => <li>
+          [<a href={query(search, [tagFilter])}>×</a>] <a href={query("", [], tagFilter)}>
+            {tagFilterIsNegative(tagFilter) ? `−` : `+`}
+            {tagFilterName(tagFilter)}
+          </a>
+        </li>)}
+      </ul>
+      {/* <h2>tags</h2> */}
+      <ul>
+        {currentTags().map(tag => <li>
+          [<a href={query(search, [], tag)}>+</a>]
+          [<a href={query(search, [], `-${tag}`)}>−</a>]
+          {" "}
+          <a href={query("", [], tag)}>{tag}</a>
+        </li>)}
+      </ul>
+    </details>
+  </>;
+
+  function currentTags() {
+    if (path == null) return [];
+    const result = itemsByPath.get(path);
+    if (result == null) return [];
+    return result.tags;
+  }
+
+  function query(initialSearch: string, remove: string[], ...add: string[]) {
+    const initialParams = new URLSearchParams(initialSearch);
+    let newParams = "";
+    for (const signedTag of [...remove, ...add]) {
+      const tag = tagFilterName(signedTag);
+      initialParams.delete(tag);
+      initialParams.delete(`-${tag}`);
+    }
+    for (const signedTag of add) {
+      if (initialParams.size > 0)
+        newParams += "&";
+      newParams += encodeURIComponent(signedTag);
+    }
+    return "?" + initialParams.toString().replace(/=($|&)/g, "$1") + newParams;
+  }
 }
 
 export function Display({
