@@ -16,11 +16,13 @@ import { ClusterMeta, ItemMeta } from "./data";
 import { SMALL, VIDEO } from "./config";
 
 export function Timeline({
+  tagFilters,
   clusters,
   reverse,
   flat,
   setPinchEnabled,
 }: {
+  tagFilters: Set<string>;
   clusters: ClusterMeta[];
   reverse: Map<string, [number, number]>;
   flat: ItemMeta[];
@@ -39,7 +41,7 @@ export function Timeline({
       return;
     }
     const [i, j] = indices;
-    const item = ref.current!.childNodes[i].childNodes[j];
+    const item = ref.current!.childNodes[i]?.childNodes[j];
     if (item != null && item instanceof HTMLElement) {
       setPinchEnabled(false);
       item.focus({
@@ -48,7 +50,7 @@ export function Timeline({
       });
       scroll(`path=${path}`, item, "center", true);
     }
-  }, [path]);
+  }, [tagFilters, reverse, path]);
 
   return (
     <div ref={ref} onWheel={wheel} onClick={click} className="Timeline">

@@ -64,6 +64,7 @@ export function Memories({ items }: { items: ItemMeta[] }) {
       <Sidebar itemsByPath={itemsByPath} tagFilters={tagFilters} />
       <Display pinchEnabled={pinchEnabled} setPinchEnabled={setPinchEnabled} />
       <Timeline
+        tagFilters={tagFilters}
         clusters={clusters}
         reverse={reverse}
         flat={flat}
