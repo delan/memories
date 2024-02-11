@@ -18,7 +18,7 @@ export function usePath() {
     return () => void handlers.splice(handlers.indexOf(handler), 1);
   }, []);
 
-  return { path, search, push };
+  return { path, search, pushPath, pushSearch };
 
   function handler({ state }: State) {
     const { path, search } = state;
@@ -26,8 +26,15 @@ export function usePath() {
     setSearch(search);
   }
 
-  function push(path: string) {
+  function pushPath(path: string) {
     const search = getSearch();
+    const state = { path, search };
+    history.pushState(state, "", path + search);
+    handlers.forEach((handler) => handler({ state }));
+  }
+
+  function pushSearch(search: string) {
+    const path = getPath();
     const state = { path, search };
     history.pushState(state, "", path + search);
     handlers.forEach((handler) => handler({ state }));

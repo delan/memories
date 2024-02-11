@@ -26,7 +26,7 @@ export function Timeline({
   flat: ItemMeta[];
   setPinchEnabled: (_: boolean) => void;
 }) {
-  const { path, push } = usePath();
+  const { path, pushPath } = usePath();
   const [focused, setFocused] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   void flat; // TODO wheel to step through items?
@@ -64,7 +64,7 @@ export function Timeline({
                 key={item.path}
                 indexInCluster={j}
                 selected={itemIsSelected(i, j)}
-                push={push}
+                pushPath={pushPath}
                 onFocus={focus}
                 onFocusArg={i}
                 {...item}
@@ -151,8 +151,9 @@ export function Timeline({
       item != null &&
       item instanceof HTMLElement &&
       item.dataset.path != null
-    )
-      push(item.dataset.path);
+    ) {
+      pushPath(item.dataset.path);
+    }
   }
 }
 
@@ -181,7 +182,7 @@ const Item = memo(
     {
       indexInCluster: number;
       selected: boolean;
-      push: (_: string) => void;
+      pushPath: (_: string) => void;
       onFocus: (
         _: number,
         path: string,
@@ -193,7 +194,7 @@ const Item = memo(
     {
       indexInCluster,
       selected,
-      push,
+      pushPath,
       onFocus,
       onFocusArg,
       path,
@@ -228,7 +229,7 @@ const Item = memo(
       // Don’t run the Timeline’s fallback click handler.
       event.stopPropagation();
 
-      push(path);
+      pushPath(path);
     }
   }),
 );

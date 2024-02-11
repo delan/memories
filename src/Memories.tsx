@@ -1,6 +1,6 @@
 import "pinch-zoom-element";
 
-import React, { useEffect, useState } from "react";
+import React, { MouseEvent, PropsWithChildren, useEffect, useState } from "react";
 
 import { Timeline } from "./Timeline";
 import { parseSearch, parseTagFilters, tagFilterIsNegative, tagFilterName, usePath } from "./path";
@@ -77,27 +77,29 @@ export function Sidebar({ itemsByPath, tagFilters }: {
   itemsByPath: Map<string, ItemMeta>;
   tagFilters: Set<string>;
 }) {
-  const { path, search } = usePath();
+  const { path, search, pushSearch } = usePath();
 
   return <>
     <details className="Sidebar">
       <summary></summary>
       {/* <h2>search</h2> */}
-      <ul>
+      <ul onClick={click}>
         {[...tagFilters].map(tagFilter => <li>
-          [<a href={query(search, [tagFilter])}>×</a>] <a href={query("", [], tagFilter)}>
+          [<TagLink search={query(search, [tagFilter])}>×</TagLink>]
+          {" "}
+          <TagLink search={query("", [], tagFilter)}>
             {tagFilterIsNegative(tagFilter) ? `−` : `+`}
             {tagFilterName(tagFilter)}
-          </a>
+          </TagLink>
         </li>)}
       </ul>
       {/* <h2>tags</h2> */}
-      <ul>
+      <ul onClick={click}>
         {currentTags().map(tag => <li>
-          [<a href={query(search, [], tag)}>+</a>]
-          [<a href={query(search, [], `-${tag}`)}>−</a>]
+          [<TagLink search={query(search, [], tag)}>+</TagLink>]
+          [<TagLink search={query(search, [], `-${tag}`)}>−</TagLink>]
           {" "}
-          <a href={query("", [], tag)}>{tag}</a>
+          <TagLink search={query("", [], tag)}>{tag}</TagLink>
         </li>)}
       </ul>
     </details>
@@ -124,6 +126,24 @@ export function Sidebar({ itemsByPath, tagFilters }: {
       newParams += encodeURIComponent(signedTag);
     }
     return "?" + initialParams.toString().replace(/=($|&)/g, "$1") + newParams;
+  }
+
+  function click(event: MouseEvent<HTMLElement>) {
+    if (
+      event.target == null ||
+      !(event.target instanceof HTMLElement) ||
+      event.target.nodeName != "A" ||
+      event.target.dataset.search == null
+    ) {
+      return;
+    }
+    // Don’t navigate due to clicking on a link.
+    event.preventDefault();
+    pushSearch(event.target.dataset.search);
+  }
+
+  function TagLink({ children, search }: PropsWithChildren<{ search: string }>) {
+    return <a href={search} data-search={search}>{children}</a>;
   }
 }
 
